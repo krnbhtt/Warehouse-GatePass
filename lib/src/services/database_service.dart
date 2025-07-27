@@ -6,6 +6,7 @@ import '../models/party.dart';
 import '../models/gatepass.dart';
 import '../models/warehouse.dart';
 import '../models/user.dart';
+import '../models/company.dart';
 
 class DatabaseService {
 
@@ -15,7 +16,7 @@ class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
   static const String _databaseName = 'gatepass.db';
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 2;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -55,19 +56,28 @@ class DatabaseService {
 
   Future<void> _createTables(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE warehouses(
+      CREATE TABLE companies(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        address TEXT NOT NULL,
+        address TEXT,
         isActive INTEGER DEFAULT 1
       )
     ''');
 
     await db.execute('''
+      CREATE TABLE warehouses(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        address TEXT NOT NULL,
+        companyId INTEGER,
+        isActive INTEGER DEFAULT 1,
+        FOREIGN KEY (companyId) REFERENCES companies (id)
+      )
+    ''');
+
+    await db.execute('''
       CREATE TABLE parties(
-        name TEXT PRIMARY KEY,
-        gstNumber TEXT,
-        addresses TEXT
+        name TEXT PRIMARY KEY
       )
     ''');
 
@@ -76,17 +86,20 @@ class DatabaseService {
         id TEXT PRIMARY KEY,
         serialNumber TEXT NOT NULL,
         dateTime TEXT,
+        companyId INTEGER,
         warehouseId INTEGER,
         invoiceNumber TEXT,
         partyName TEXT,
-        gstNumber TEXT,
-        address TEXT,
         vehicleNumber TEXT,
         quantity REAL,
+        quantityUnit TEXT DEFAULT 'MT',
         productGrade TEXT,
         isPrinted INTEGER,
         isSynced INTEGER,
         createdBy TEXT,
+        approvedBy TEXT,
+        approverName TEXT,
+        FOREIGN KEY (companyId) REFERENCES companies (id),
         FOREIGN KEY (warehouseId) REFERENCES warehouses (id),
         FOREIGN KEY (partyName) REFERENCES parties (name)
       )
@@ -113,11 +126,76 @@ class DatabaseService {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Add new tables and columns for version 2
-      await db.execute('ALTER TABLE gatepasses ADD COLUMN warehouseId INTEGER');
-      await db.execute('ALTER TABLE gatepasses ADD COLUMN serialNumber TEXT');
-      await db.execute('ALTER TABLE gatepasses ADD COLUMN createdBy TEXT');
+      // Add companies table
+      await db.execute('''
+        CREATE TABLE companies(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          address TEXT,
+          isActive INTEGER DEFAULT 1
+        )
+      ''');
+
+      // Add default company
+      await db.execute('''
+        INSERT INTO companies (name, address, isActive) 
+        VALUES ('Default Company', 'Default Address', 1)
+      ''');
+
+      // Add companyId column to warehouses
+      await db.execute('ALTER TABLE warehouses ADD COLUMN companyId INTEGER');
+      
+      // Update existing warehouses to use default company
+      await db.execute('UPDATE warehouses SET companyId = 1 WHERE companyId IS NULL');
+
+      // Add companyId column to gatepasses
+      await db.execute('ALTER TABLE gatepasses ADD COLUMN companyId INTEGER');
+      
+      // Update existing gatepasses to use default company
+      await db.execute('UPDATE gatepasses SET companyId = 1 WHERE companyId IS NULL');
+
+      // Add quantityUnit column to gatepasses
+      await db.execute('ALTER TABLE gatepasses ADD COLUMN quantityUnit TEXT DEFAULT "MT"');
+
+      // Add approval fields to gatepasses
+      await db.execute('ALTER TABLE gatepasses ADD COLUMN approvedBy TEXT');
+      await db.execute('ALTER TABLE gatepasses ADD COLUMN approverName TEXT');
+
+      // Remove gstNumber and address columns from gatepasses (if they exist)
+      try {
+        await db.execute('ALTER TABLE gatepasses DROP COLUMN gstNumber');
+        await db.execute('ALTER TABLE gatepasses DROP COLUMN address');
+      } catch (e) {
+        // Columns might not exist, ignore error
+      }
+
+      // Simplify parties table
+      await db.execute('CREATE TABLE parties_new (name TEXT PRIMARY KEY)');
+      await db.execute('INSERT INTO parties_new (name) SELECT name FROM parties');
+      await db.execute('DROP TABLE parties');
+      await db.execute('ALTER TABLE parties_new RENAME TO parties');
     }
+  }
+
+  // Company operations
+  Future<void> insertCompany(Company company) async {
+    final db = await database;
+    await db.insert('companies', company.toMap());
+  }
+
+  Future<List<Company>> getAllCompanies() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('companies');
+    return List.generate(maps.length, (i) => Company.fromMap(maps[i]));
+  }
+
+  Future<void> deleteCompany(int id) async {
+    final db = await database;
+    await db.delete(
+      'companies',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   // Warehouse operations
@@ -129,6 +207,16 @@ class DatabaseService {
   Future<List<Warehouse>> getAllWarehouses() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('warehouses');
+    return List.generate(maps.length, (i) => Warehouse.fromMap(maps[i]));
+  }
+
+  Future<List<Warehouse>> getWarehousesByCompany(int companyId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'warehouses',
+      where: 'companyId = ?',
+      whereArgs: [companyId],
+    );
     return List.generate(maps.length, (i) => Warehouse.fromMap(maps[i]));
   }
 
@@ -220,6 +308,7 @@ class DatabaseService {
     DateTime? endDate,
     String? partyName,
     int? warehouseId,
+    int? companyId,
     bool? isSynced,
   }) async {
     final db = await database;
@@ -241,6 +330,12 @@ class DatabaseService {
       if (whereClause.isNotEmpty) whereClause += ' AND ';
       whereClause += 'warehouseId = ?';
       whereArgs.add(warehouseId);
+    }
+
+    if (companyId != null) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      whereClause += 'companyId = ?';
+      whereArgs.add(companyId);
     }
 
     if (isSynced != null) {
@@ -336,5 +431,32 @@ class DatabaseService {
     );
     if (maps.isEmpty) return null;
     return User.fromMap(maps.first);
+  }
+
+  // Get unique vehicle numbers for autocomplete
+  Future<List<String>> getUniqueVehicleNumbers() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'gatepasses',
+      distinct: true,
+      columns: ['vehicleNumber'],
+      orderBy: 'vehicleNumber ASC',
+    );
+    return List.generate(maps.length, (i) => maps[i]['vehicleNumber'] as String);
+  }
+
+  // Get vehicle numbers that match a prefix for autocomplete
+  Future<List<String>> getVehicleNumbersByPrefix(String prefix) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'gatepasses',
+      distinct: true,
+      columns: ['vehicleNumber'],
+      where: 'vehicleNumber LIKE ?',
+      whereArgs: ['${prefix.toUpperCase()}%'],
+      orderBy: 'vehicleNumber ASC',
+      limit: 10, // Limit to 10 suggestions
+    );
+    return List.generate(maps.length, (i) => maps[i]['vehicleNumber'] as String);
   }
 } 

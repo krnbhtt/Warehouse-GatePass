@@ -3,6 +3,7 @@ import '../../services/database_service.dart';
 import '../../services/session_service.dart';
 import '../../models/user.dart';
 import '../../models/warehouse.dart';
+import '../../models/company.dart';
 import '../dialogs/warehouse_setup_dialog.dart';
 import '../dialogs/user_setup_dialog.dart';
 import 'home_screen.dart';
@@ -73,12 +74,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _checkFirstTime() async {
     try {
       final users = await _dbService.getUsers();
+      final companies = await _dbService.getAllCompanies();
       final warehouses = await _dbService.getAllWarehouses();
       final parties = await _dbService.getAllParties();
       
       setState(() {
-        // Only show first time setup if there are no users, warehouses, or parties
-        _isFirstTime = users.isEmpty || warehouses.isEmpty || parties.isEmpty;
+        // Only show first time setup if there are no users, companies, warehouses, or parties
+        _isFirstTime = users.isEmpty || companies.isEmpty || warehouses.isEmpty || parties.isEmpty;
       });
     } catch (e) {
       if (mounted) {
@@ -127,7 +129,20 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _showInitialSetup() async {
-    // Step 1: Add Warehouse
+    // Step 1: Add Company (if needed)
+    final companies = await _dbService.getAllCompanies();
+    Company? selectedCompany;
+    
+    if (companies.isEmpty) {
+      // Create a default company
+      final defaultCompany = Company(name: 'Default Company', address: 'Default Address');
+      await _dbService.insertCompany(defaultCompany);
+      selectedCompany = defaultCompany;
+    } else {
+      selectedCompany = companies.first;
+    }
+
+    // Step 2: Add Warehouse
     final warehouse = await showDialog<Warehouse>(
       context: context,
       barrierDismissible: false,
@@ -136,26 +151,32 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (warehouse == null) return;
 
-    // Step 2: Add Admin User
+    // Step 3: Add Admin User
     final admin = await showDialog<User>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => UserSetupDialog(
-        warehouseId: warehouse.id ?? 1,
+      builder: (context) => const UserSetupDialog(
         isAdmin: true,
       ),
     );
 
     if (admin == null) return;
 
-    // Step 3: Add Party Master
+    // Step 4: Add Party Master
     if (mounted) {
-      Navigator.pushReplacement(
+      final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => const MasterUploadScreen(),
         ),
       );
+      
+      // After party upload, refresh the screen to show login form
+      if (mounted) {
+        setState(() {
+          _isFirstTime = false;
+        });
+      }
     }
   }
 

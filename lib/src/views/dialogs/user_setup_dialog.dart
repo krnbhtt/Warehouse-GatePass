@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../models/user.dart';
+import '../../models/warehouse.dart';
+import '../../models/company.dart';
 import '../../services/database_service.dart';
 
 class UserSetupDialog extends StatefulWidget {
 
   const UserSetupDialog({
     super.key,
-    required this.warehouseId,
+    this.warehouseId,
     this.isAdmin = false,
   });
-  final int warehouseId;
+  final int? warehouseId;
   final bool isAdmin;
 
   @override
@@ -22,7 +24,46 @@ class _UserSetupDialogState extends State<UserSetupDialog> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _dbService = DatabaseService();
+  List<Company> _companies = [];
+  List<Warehouse> _warehouses = [];
+  Company? _selectedCompany;
+  Warehouse? _selectedWarehouse;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final companies = await _dbService.getAllCompanies();
+      final warehouses = await _dbService.getAllWarehouses();
+      setState(() {
+        _companies = companies;
+        _warehouses = warehouses;
+        if (companies.isNotEmpty) {
+          _selectedCompany = companies.first;
+        }
+        if (widget.warehouseId != null) {
+          try {
+            _selectedWarehouse = warehouses.firstWhere((w) => w.id == widget.warehouseId);
+          } catch (e) {
+            _selectedWarehouse = warehouses.isNotEmpty ? warehouses.first : null;
+          }
+        } else if (warehouses.isNotEmpty) {
+          _selectedWarehouse = warehouses.first;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading data: $e')),
+        );
+      }
+    }
+  }
 
   Future<void> _saveUser() async {
     if (!_formKey.currentState!.validate()) return;
@@ -33,7 +74,7 @@ class _UserSetupDialogState extends State<UserSetupDialog> {
         username: _usernameController.text,
         password: _passwordController.text,
         role: widget.isAdmin ? 'admin' : 'user',
-        warehouseId: widget.warehouseId,
+        warehouseId: _selectedWarehouse?.id,
       );
 
       await _dbService.insertUser(user);
@@ -60,6 +101,43 @@ class _UserSetupDialogState extends State<UserSetupDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            DropdownButtonFormField<Company>(
+              value: _selectedCompany,
+              decoration: const InputDecoration(
+                labelText: 'Company',
+              ),
+              items: _companies.map((company) {
+                return DropdownMenuItem(
+                  value: company,
+                  child: Text(company.name),
+                );
+              }).toList(),
+              onChanged: (Company? company) {
+                setState(() {
+                  _selectedCompany = company;
+                  _selectedWarehouse = null;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<Warehouse>(
+              value: _selectedWarehouse,
+              decoration: const InputDecoration(
+                labelText: 'Warehouse',
+              ),
+              items: _warehouses
+                  .where((w) => _selectedCompany == null || w.companyId == _selectedCompany?.id)
+                  .map((warehouse) {
+                return DropdownMenuItem(
+                  value: warehouse,
+                  child: Text(warehouse.name),
+                );
+              }).toList(),
+              onChanged: (Warehouse? warehouse) {
+                setState(() => _selectedWarehouse = warehouse);
+              },
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _usernameController,
               decoration: const InputDecoration(

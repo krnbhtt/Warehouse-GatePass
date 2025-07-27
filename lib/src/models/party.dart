@@ -1,29 +1,24 @@
-import 'dart:convert';
-
+/// Represents a party/client entity in the system
 class Party {
 
+  /// Creates a new party instance
   Party({
     required this.name,
-    required this.gstNumber,
-    required this.addresses,
   });
 
+  /// Creates a party from a map representation
   factory Party.fromMap(Map<String, dynamic> map) {
     return Party(
       name: map['name'],
-      gstNumber: map['gstNumber'],
-      addresses: List<String>.from(jsonDecode(map['addresses'])),
     );
   }
+  /// Name of the party/client
   final String name;
-  final String gstNumber;
-  final List<String> addresses;
 
+  /// Converts the party to a map representation
   Map<String, dynamic> toMap() {
     return {
       'name': name,
-      'gstNumber': gstNumber,
-      'addresses': jsonEncode(addresses),
     };
   }
 } 

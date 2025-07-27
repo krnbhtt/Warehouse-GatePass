@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/warehouse.dart';
+import '../../models/company.dart';
 import '../../services/database_service.dart';
 
 class WarehouseSetupDialog extends StatefulWidget {
@@ -14,7 +15,33 @@ class _WarehouseSetupDialogState extends State<WarehouseSetupDialog> {
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
   final _dbService = DatabaseService();
+  List<Company> _companies = [];
+  Company? _selectedCompany;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCompanies();
+  }
+
+  Future<void> _loadCompanies() async {
+    try {
+      final companies = await _dbService.getAllCompanies();
+      setState(() {
+        _companies = companies;
+        if (companies.isNotEmpty) {
+          _selectedCompany = companies.first;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading companies: $e')),
+        );
+      }
+    }
+  }
 
   Future<void> _saveWarehouse() async {
     if (!_formKey.currentState!.validate()) return;
@@ -24,6 +51,7 @@ class _WarehouseSetupDialogState extends State<WarehouseSetupDialog> {
       final warehouse = Warehouse(
         name: _nameController.text,
         address: _addressController.text,
+        companyId: _selectedCompany?.id,
       );
 
       await _dbService.insertWarehouse(warehouse);
@@ -50,6 +78,28 @@ class _WarehouseSetupDialogState extends State<WarehouseSetupDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            DropdownButtonFormField<Company>(
+              value: _selectedCompany,
+              decoration: const InputDecoration(
+                labelText: 'Company',
+              ),
+              items: _companies.map((company) {
+                return DropdownMenuItem(
+                  value: company,
+                  child: Text(company.name),
+                );
+              }).toList(),
+              onChanged: (Company? company) {
+                setState(() => _selectedCompany = company);
+              },
+              validator: (value) {
+                if (value == null) {
+                  return 'Please select a company';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(

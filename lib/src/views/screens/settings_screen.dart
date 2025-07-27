@@ -11,6 +11,7 @@ import 'master_upload_screen.dart';
 import '../../services/session_service.dart';
 import 'warehouse_management_screen.dart';
 import 'party_management_screen.dart';
+import 'company_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -244,6 +245,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('Manage Product Grades'),
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const GradesScreen()));
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.business),
+                title: const Text('Manage Companies'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CompanyManagementScreen()),
+                  );
                 },
               ),
               const Divider(),

@@ -31,25 +31,14 @@ class ImportService {
     _validateHeaders(headers);
 
     final parties = <String, Party>{};
-    var addressCount = 0;
 
     for (var i = 1; i < rows.length; i++) {
       final row = rows[i];
-      final partyName = row[headers.indexOf('Party Name')].toString();
-      final gstNumber = row[headers.indexOf('GST Number')].toString();
-      final address = row[headers.indexOf('Address')].toString();
+      final partyName = row[headers.indexOf('Party Name')].toString().trim();
 
-      final key = '$partyName|$gstNumber';
-      if (!parties.containsKey(key)) {
-        parties[key] = Party(
-          name: partyName,
-          gstNumber: gstNumber,
-          addresses: [address],
-        );
-      } else {
-        parties[key]!.addresses.add(address);
+      if (partyName.isNotEmpty) {
+        parties[partyName] = Party(name: partyName);
       }
-      addressCount++;
     }
 
     for (final party in parties.values) {
@@ -58,7 +47,7 @@ class ImportService {
 
     return ImportResult(
       partyCount: parties.length,
-      addressCount: addressCount,
+      addressCount: 0, // No addresses in new structure
     );
   }
 
@@ -76,27 +65,14 @@ class ImportService {
     _validateHeaders(headers);
 
     final parties = <String, Party>{};
-    var addressCount = 0;
 
     for (var i = 1; i < rows.length; i++) {
       final row = rows[i];
       final partyName = row[headers.indexOf('Party Name')]?.value.toString() ?? '';
-      final gstNumber = row[headers.indexOf('GST Number')]?.value.toString() ?? '';
-      final address = row[headers.indexOf('Address')]?.value.toString() ?? '';
 
-      if (partyName.isEmpty || gstNumber.isEmpty || address.isEmpty) continue;
-
-      final key = '$partyName|$gstNumber';
-      if (!parties.containsKey(key)) {
-        parties[key] = Party(
-          name: partyName,
-          gstNumber: gstNumber,
-          addresses: [address],
-        );
-      } else {
-        parties[key]!.addresses.add(address);
+      if (partyName.isNotEmpty) {
+        parties[partyName] = Party(name: partyName);
       }
-      addressCount++;
     }
 
     for (final party in parties.values) {
@@ -105,12 +81,12 @@ class ImportService {
 
     return ImportResult(
       partyCount: parties.length,
-      addressCount: addressCount,
+      addressCount: 0, // No addresses in new structure
     );
   }
 
   void _validateHeaders(List<String> headers) {
-    final requiredHeaders = ['Party Name', 'GST Number', 'Address'];
+    final requiredHeaders = ['Party Name'];
     final missingHeaders = requiredHeaders
         .where((header) => !headers.contains(header))
         .toList();

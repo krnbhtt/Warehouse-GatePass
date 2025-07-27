@@ -20,17 +20,12 @@ void main() async {
 
   // Global error handling
   FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.dumpErrorToConsole(details);
-    // Optionally, show a dialog or log to a service
+    FlutterError.presentError(details);
+    // Optionally log to a file or remote service
+    print('Flutter Error: ${details.exception}');
   };
 
-  runZonedGuarded(
-    () => runApp(const MyApp()),
-    (error, stackTrace) {
-      // Optionally, log to a service
-      debugPrint('Uncaught error: $error\n$stackTrace');
-    },
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -40,6 +35,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Karan Infosys - Gate Pass',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,

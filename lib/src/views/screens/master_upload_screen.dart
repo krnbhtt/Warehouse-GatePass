@@ -87,25 +87,15 @@ class _MasterUploadScreenState extends State<MasterUploadScreen> {
 
         final row = _parseCsvLine(line);
 
-        if (row.length < 3) {
-          throw Exception('Row ${i + 1} is missing required columns. Found ${row.length} columns, expected 3.');
+        if (row.length < 1) {
+          throw Exception('Row ${i + 1} is missing required columns. Found ${row.length} columns, expected 1.');
         }
 
-        String addressesStr = row[2].trim();
-        List<String> addresses = [];
-        if (addressesStr.isNotEmpty) {
-          addresses = addressesStr.split('|').map((addr) => addr.trim()).toList();
+        final partyName = row[0].trim();
+        if (partyName.isNotEmpty) {
+          final party = Party(name: partyName);
+          _parties.add(party);
         }
-        if (addresses.isEmpty) {
-          addresses = ['No address provided'];
-        }
-
-        final party = Party(
-          name: row[0].trim(),
-          gstNumber: row[1].trim(),
-          addresses: addresses,
-        );
-        _parties.add(party);
       }
 
       // Save to database
@@ -121,7 +111,7 @@ class _MasterUploadScreenState extends State<MasterUploadScreen> {
           ),
         );
         
-        // Navigate back to settings screen instead of login
+        // Navigate back to settings screen
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -239,11 +229,11 @@ class _MasterUploadScreenState extends State<MasterUploadScreen> {
                                       const SizedBox(height: 8),
                                       const Text(
                                         'The CSV file should have the following columns:\n'
-                                        '1. Party Name\n'
-                                        '2. GST Number\n'
-                                        '3. Addresses (separated by |)\n\n'
+                                        '1. Party Name\n\n'
                                         'Example:\n'
-                                        'Tata Steel Ltd,27AAACT1234A1Z1,"123 Main St|456 Second St|789 Third St"',
+                                        'Tata Steel Ltd\n'
+                                        'ABC Corporation\n'
+                                        'XYZ Traders',
                                       ),
                                     ],
                                   ),
@@ -277,18 +267,6 @@ class _MasterUploadScreenState extends State<MasterUploadScreen> {
                         return Card(
                           child: ListTile(
                             title: Text(party.name),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('GST: ${party.gstNumber}'),
-                                const SizedBox(height: 4),
-                                Text('Addresses:'),
-                                ...party.addresses.map((address) => Padding(
-                                  padding: const EdgeInsets.only(left: 16),
-                                  child: Text('• $address'),
-                                )),
-                              ],
-                            ),
                           ),
                         );
                       },
@@ -298,28 +276,5 @@ class _MasterUploadScreenState extends State<MasterUploadScreen> {
               ],
             ),
     );
-    // bottomNavigationBar: Padding(
-    //   padding: const EdgeInsets.all(16),
-    //   child: ElevatedButton.icon(
-    //     onPressed: _isLoading ? null : () {
-    //       Navigator.push(
-    //         context,
-    //         MaterialPageRoute(builder: (context) => const ProductGradeScreen()),
-    //       );
-    //     },
-    //     icon: const Icon(Icons.skip_next),
-    //     label: const Text('Skip / Next: Add Grades'),
-    //     style: ElevatedButton.styleFrom(
-    //       backgroundColor: Colors.blueAccent,
-    //       minimumSize: const Size.fromHeight(48),
-    //     ),
-    //   ),
-    // );
-    // ),
-    // ],
-    //           ],
-    //       ),
-    //     ),
-    // );
   }
 }
